@@ -1,7 +1,8 @@
 use std::any::Any;
+use std::error::Error;
 use rush::app::Component;
 
-pub(crate) struct Nice {
+pub struct Nice {
     name: String
 }
 
@@ -14,8 +15,9 @@ impl Nice {
 }
 
 impl Component for Nice {
-    fn init(&mut self) {
+    fn init(&mut self) -> Result<(), Box<dyn Error>> {
         println!("nice init");
+        Ok(())
     }
 
     fn run(&mut self) {
