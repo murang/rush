@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 signal-hook = "0.3.18"
+tokio = "1.45.1"
+tokio-tungstenite = "0.27.0"

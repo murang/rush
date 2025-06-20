@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 rush = { path = "../rush" }
+tokio = { version = "1.45.1", features = ["full"] }
 
 
 [build-dependencies]

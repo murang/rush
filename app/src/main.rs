@@ -1,13 +1,13 @@
-use rush::app::App;
+mod nice;
+
+use rush::{app::App};
+
 
 fn main() {
     let mut app = App::new();
-    let mut counter = 0;
+    app.add_component(nice::Nice::new());
     app.on_exit(||{
        println!("lets exit"); 
     });
-    app.run(10, move || {
-        println!("tick {}",  counter.to_string());
-        counter += 1;
-    });
+    app.start_run(1);
 }

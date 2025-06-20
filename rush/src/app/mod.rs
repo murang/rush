@@ -1,80 +1,65 @@
+mod component;
+
+use std::any::TypeId;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 use signal_hook::consts::signal::*;
 use signal_hook::flag::register;
+pub use component::Component;
 
 pub struct App {
-    exiting: Arc<AtomicBool>,
-    handle: Option<thread::JoinHandle<()>>,
-    on_exit: Option<Box<dyn FnMut() + Send + 'static>>,
+    components: HashMap<TypeId, Box<dyn Component>>,
+    on_exit: Option<Box<dyn Fn()>>,
 }
 
 impl App {
     pub fn new() -> Self {
         Self {
-            exiting: Arc::new(AtomicBool::new(false)),
-            handle: None,
+            components: HashMap::new(),
             on_exit: None
         }
     }
-
-    pub fn on_exit<F>(&mut self, on_exit : F) where F: FnMut() + Send + 'static {
+    
+    pub fn add_component<T: Component + 'static>(&mut self, component: T) {
+        let type_id = TypeId::of::<T>();
+        self.components.insert(type_id, Box::new(component));
+    }
+    
+    pub fn on_exit<F>(&mut self, on_exit : F) where F: Fn() + 'static {
         self.on_exit = Some(Box::new(on_exit));
     }
     
-    pub fn run<F>(&mut self, fps : u32, mut tick : F) where F: FnMut() + Send + 'static{
-        let exiting = Arc::clone(&self.exiting);
-        exiting.store(false, Ordering::SeqCst);
-        
+    pub fn start_run(&mut self, fps : u32) {
         let tick_duration = Duration::from_secs_f64(1.0 / fps as f64);
-
-        self.handle = Some(thread::spawn(move || {
-            while !exiting.load(Ordering::SeqCst) {
-                let start = Instant::now();
-
-                // 执行 tick 逻辑
-                tick();
-
-                // 睡眠直到下一次 tick
-                let elapsed = start.elapsed();
-                if elapsed < tick_duration {
-                    thread::sleep(tick_duration - elapsed);
-                }
-            }
-        }));
-
+        
         // 设置终止标志
         let term = Arc::new(AtomicBool::new(false));
         let term_ref = term.clone();
         // 注册 SIGINT (Ctrl+C) 和 SIGTERM (kill)
         register(SIGINT, term_ref.clone()).expect("app terminal register SIGINT failed");
         register(SIGTERM, term_ref).expect("app terminal register SIGTERM failed");
-        // 阻塞等待
+        // 没关闭 就去执行逻辑
         while !term.load(Ordering::Relaxed) {
-            thread::sleep(Duration::from_millis(100));
+            let start = Instant::now();
+            // 执行组件逻辑
+            for (_, comp) in &mut self.components {
+                comp.run();
+            }
+            // 睡眠直到下一次 tick
+            let elapsed = start.elapsed();
+            if elapsed < tick_duration {
+                thread::sleep(tick_duration - elapsed);
+            }
         }
-
-        println!("got signal, begin exit");
-        self.exiting.store(true, Ordering::SeqCst);
+        
+        println!("got term signal, begin exit");
         // 执行关闭回调
-        if let Some(mut on_exit) = self.on_exit.take() {
+        if let Some(on_exit) = self.on_exit.take() {
             on_exit();
         }
-        thread::sleep(Duration::from_secs(1));
         println!("app exited, see ya~");
-    }
-
-    pub fn shutdown(&mut self) {
-        self.exiting.store(true, Ordering::SeqCst);
-
-        if let Some(handle) = self.handle.take() {
-            let _ = handle.join(); // 等待线程退出
-        }
-    }
-
-    pub fn is_running(&self) -> bool {
-        self.exiting.load(Ordering::SeqCst)
     }
 }
