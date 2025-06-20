@@ -41,6 +41,12 @@ impl App {
         // 注册 SIGINT (Ctrl+C) 和 SIGTERM (kill)
         register(SIGINT, term_ref.clone()).expect("app terminal register SIGINT failed");
         register(SIGTERM, term_ref).expect("app terminal register SIGTERM failed");
+        
+        // 组件初始化
+        for (_, comp) in &mut self.components {
+            comp.init().expect("init component failed");
+        }
+        
         // 没关闭 就去执行逻辑
         while !term.load(Ordering::Relaxed) {
             let start = Instant::now();
